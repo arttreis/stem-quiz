@@ -792,8 +792,8 @@ a{text-decoration:none;color:inherit}
 (function(){
   'use strict';
 
-  var RD_ENDPOINT = ''; // TODO: URL da RD Station
-  var RD_TOKEN = '';     // TODO: Bearer token
+  var RD_API_KEY = 'f5e4da3693dcf6e31840e36b39f78740';
+  var RD_CONVERSION_ID = 'quiz-diagnostico-stem';
 
   var state = { screen:0, answers:{}, name:'', email:'' };
 
@@ -919,20 +919,37 @@ a{text-decoration:none;color:inherit}
     trackEvent('quiz_email_submitted');
     var protocol=getProtocol();
 
-    if(RD_ENDPOINT){
-      var payload={name:state.name,email:state.email,tags:protocol.tags,
-        custom_fields:{protocolo_interesse:protocol.name,estilo_vida:state.answers.p1||'',pico_desgaste:state.answers.p2||'',objetivo_saude:state.answers.p4||'',horario_preferido:state.answers.p5||''}};
-      var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},5000);
-      fetch(RD_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+RD_TOKEN},body:JSON.stringify(payload),signal:ctrl.signal})
-      .then(function(r){clearTimeout(to);return r.json()})
-      .then(function(d){console.log('[RD] OK',d)})
-      .catch(function(err){
-        console.error('[RD] Error',{erro:err.message,nome:state.name,email:state.email,protocolo:protocol.slug,ts:new Date().toISOString()});
-        setTimeout(function(){fetch(RD_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+RD_TOKEN},body:JSON.stringify(payload)}).catch(function(){})},10000);
-      });
-    }else{
-      console.log('[RD] Endpoint não configurado. Payload:',{name:state.name,email:state.email,tags:protocol.tags,answers:state.answers});
-    }
+    var rdPayload={
+      event_type:'CONVERSION',
+      event_family:'CDP',
+      payload:{
+        conversion_identifier:RD_CONVERSION_ID,
+        name:state.name,
+        email:state.email,
+        tags:protocol.tags,
+        cf_protocolo_interesse:protocol.name,
+        cf_estilo_vida:state.answers.p1||'',
+        cf_pico_desgaste:state.answers.p2||'',
+        cf_objetivo_saude:state.answers.p4||'',
+        cf_horario_preferido:state.answers.p5||''
+      }
+    };
+    var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},5000);
+    fetch('https://api.rd.services/platform/conversions?api_key='+RD_API_KEY,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(rdPayload),signal:ctrl.signal
+    })
+    .then(function(r){clearTimeout(to);return r.json()})
+    .then(function(d){console.log('[RD] OK',d)})
+    .catch(function(err){
+      console.error('[RD] Error',{erro:err.message,nome:state.name,email:state.email,protocolo:protocol.slug,ts:new Date().toISOString()});
+      setTimeout(function(){
+        fetch('https://api.rd.services/platform/conversions?api_key='+RD_API_KEY,{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(rdPayload)
+        }).catch(function(){});
+      },10000);
+    });
     setTimeout(function(){btn.classList.remove('btn--loading');showResult(protocol)},800);
   };
 
